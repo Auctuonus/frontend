@@ -1,19 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ChangeEvent } from "react";
+import api, { type Bid as ApiBid, type Auction } from "../api/stubs";
 
 type SimUser = { id: string; name: string };
-
-type Bid = {
-  userId: string;
-  amount: number;
-  updatedAt: number; // used to break ties: earlier beats later
-};
-
-type Winner = {
-  round: number;
-  userId: string;
-  amount: number;
-  giftNumber: number;
-};
 
 function fmtStars(n: number) {
   return `${n.toLocaleString()} ⭐`;
@@ -38,6 +27,9 @@ export default function AuctionSimPage() {
       try {
         tg.ready?.();
         tg.expand?.();
+        if (tg.initData) {
+          api.auth.tg(tg.initData).catch(() => {});
+        }
       } catch {}
     }
   }, []);
@@ -45,111 +37,44 @@ export default function AuctionSimPage() {
   const mockLogin = useCallback(() => {
     const id = `mock-${Math.random().toString(16).slice(2, 10)}`;
     setUser({ id, name: `Mock ${id.slice(-4)}` });
+    api.auth.refresh("mock").catch(() => {});
   }, []);
   const logout = useCallback(() => {
     setUser(null);
   }, []);
 
-  // Auction config
-  const [totalGifts, setTotalGifts] = useState(10);
-  const [perRound, setPerRound] = useState(3);
-  const [roundDurationSec, setRoundDurationSec] = useState(60);
+  // Auction params (read-only for UI)
+  const perRound = 3;
 
   // Runtime state
-  const [roundIndex, setRoundIndex] = useState(1);
-  const [state, setState] = useState<"idle" | "running" | "ended">("idle");
-  const [endAt, setEndAt] = useState<number | null>(null);
-
-  const [bids, setBids] = useState<Bid[]>([]);
-  const [winners, setWinners] = useState<Winner[]>([]);
-
-  // Timer
+  const [roundIndex] = useState(1);
+  const [auctionId, setAuctionId] = useState<string | null>(null);
+  const [topBids, setTopBids] = useState<ApiBid[]>([]);
+  const [myBid, setMyBid] = useState<ApiBid | null>(null);
+  const [endAtMs, setEndAtMs] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState(0);
-  useEffect(() => {
-    if (state !== "running" || !endAt) {
-      setTimeLeft(0);
-      return;
-    }
-    const tick = () => setTimeLeft(Math.max(0, endAt - Date.now()));
-    tick();
-    const t = setInterval(tick, 200);
-    return () => clearInterval(t);
-  }, [state, endAt]);
+  const [auctionDetails, setAuctionDetails] = useState<Auction | null>(null);
 
   // Derived
-  const giftsAssigned = winners.length;
-  const giftsLeft = Math.max(0, totalGifts - giftsAssigned);
   const sortedLeaderboard = useMemo(() => {
-    const arr = [...bids];
-    arr.sort((a, b) => (b.amount - a.amount) || (a.updatedAt - b.updatedAt));
+    const arr: ApiBid[] = [...topBids];
+    arr.sort((a: ApiBid, b: ApiBid) => (b.amount - a.amount) || (a.updatedAt.localeCompare(b.updatedAt)));
     return arr;
-  }, [bids]);
+  }, [topBids]);
   const minToWin = sortedLeaderboard[perRound - 1]?.amount ?? null;
-  const myBid = user ? bids.find((b) => b.userId === user.id) ?? null : null;
   const myRank = user ? sortedLeaderboard.findIndex((b) => b.userId === user.id) : -1;
 
-  // Actions
-  const startRound = useCallback(() => {
-    if (state === "ended") return;
-    if (giftsLeft <= 0) return;
-    setState("running");
-    setEndAt(Date.now() + roundDurationSec * 1000);
-  }, [giftsLeft, roundDurationSec, state]);
-
-  const endRound = useCallback(() => {
-    if (state !== "running") return;
-    const capacity = Math.min(perRound, giftsLeft);
-    if (capacity <= 0) {
-      setState("ended");
-      return;
-    }
-
-    const sorted = [...sortedLeaderboard];
-    const winnersNow = sorted.slice(0, capacity);
-    const nextGiftStart = giftsAssigned + 1;
-
-    const roundWinners: Winner[] = winnersNow.map((b, i) => ({
-      round: roundIndex,
-      userId: b.userId,
-      amount: b.amount,
-      giftNumber: nextGiftStart + i,
-    }));
-
-    const remainingBids = bids.filter((b) => !winnersNow.some((w) => w.userId === b.userId));
-
-    const allWinners = [...winners, ...roundWinners];
-    setWinners(allWinners);
-    setBids(remainingBids);
-
-    const finished = allWinners.length >= totalGifts;
-    if (finished) {
-      setState("ended");
-      setEndAt(null);
-    } else {
-      setState("idle");
-      setEndAt(null);
-      setRoundIndex((i) => i + 1);
-    }
-  }, [bids, giftsAssigned, giftsLeft, perRound, roundIndex, sortedLeaderboard, state, totalGifts, winners]);
-
   const [amountInput, setAmountInput] = useState(100);
-  const placeOrIncreaseBid = useCallback(() => {
-    if (!user) return;
-    if (amountInput <= 0) return;
-    setBids((prev) => {
-      const idx = prev.findIndex((b) => b.userId === user.id);
-      const now = Date.now();
-      if (idx === -1) {
-        return [...prev, { userId: user.id, amount: amountInput, updatedAt: now }];
-      }
-      if (amountInput <= prev[idx].amount) {
-        return prev;
-      }
-      const copy = [...prev];
-      copy[idx] = { ...copy[idx], amount: amountInput, updatedAt: now };
-      return copy;
-    });
-  }, [amountInput, user]);
+  const placeOrIncreaseBid = useCallback(async () => {
+    if (!user || !auctionId) return;
+    if (amountInput <= (myBid?.amount ?? 0)) return;
+    const res = await api.bids.set_bid({ auctionId, amount: amountInput });
+    if (res.status !== "ok") return;
+    setAmountInput(res.data?.amount ?? amountInput);
+    const { my_bids, top_bids } = await api.bids.get_by_auction(auctionId);
+    setMyBid(my_bids);
+    setTopBids(top_bids);
+  }, [amountInput, auctionId, myBid, user]);
 
   // Helpers
   function formatTime(ms: number) {
@@ -159,12 +84,36 @@ export default function AuctionSimPage() {
     return `${m.toString().padStart(2, "0")}:${sec.toString().padStart(2, "0")}`;
   }
 
-  // Refunds for my user (when auction ended)
-  const myRefund = useMemo(() => {
-    if (!user || state !== "ended") return 0;
-    const b = bids.find((x) => x.userId === user.id);
-    return b?.amount ?? 0;
-  }, [user, state, bids]);
+  // Effects
+  useEffect(() => {
+    let t: any;
+    if (endAtMs) {
+      const tick = () => setTimeLeft(Math.max(0, endAtMs - Date.now()));
+      tick();
+      t = setInterval(tick, 500);
+    } else {
+      setTimeLeft(0);
+    }
+    return () => t && clearInterval(t);
+  }, [endAtMs]);
+
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      // pick first active auction
+      const list = await api.auctions.get_list({ filters: { status: ["active"] }, pagination: { page: 1, pageSize: 10 } });
+      const first = list.auctions[0];
+      if (!first) return;
+      setAuctionId(first.id);
+      const { auction } = await api.auctions.get(first.id);
+      const end = auction.rounds?.[0]?.endTime ? Date.parse(auction.rounds[0].endTime) : NaN;
+      setEndAtMs(Number.isFinite(end) ? end : null);
+      setAuctionDetails(auction);
+      const { my_bids, top_bids } = await api.bids.get_by_auction(first.id);
+      setMyBid(my_bids);
+      setTopBids(top_bids);
+    })();
+  }, [user]);
 
   return (
     <div className="space-y-6">
@@ -196,73 +145,84 @@ export default function AuctionSimPage() {
         </div>
       </section>
 
-      {/* Config */}
-      <section className="tg-card space-y-3">
-        <div className="text-lg font-semibold">Auction Config</div>
-        <div className="grid grid-cols-3 gap-3">
-          <div>
-            <label className="block text-sm tg-muted mb-1">Total gifts</label>
-            <input
-              type="number"
-              value={totalGifts}
-              onChange={(e) => setTotalGifts(parseInt(e.target.value) || 0)}
-              className="w-full tg-input"
-            />
-          </div>
-          <div>
-            <label className="block text-sm tg-muted mb-1">Per round</label>
-            <input
-              type="number"
-              value={perRound}
-              onChange={(e) => setPerRound(parseInt(e.target.value) || 0)}
-              className="w-full tg-input"
-            />
-          </div>
-          <div>
-            <label className="block text-sm tg-muted mb-1">Round duration (sec)</label>
-            <input
-              type="number"
-              value={roundDurationSec}
-              onChange={(e) => setRoundDurationSec(parseInt(e.target.value) || 0)}
-              className="w-full tg-input"
-            />
-          </div>
-        </div>
-        <div className="text-sm tg-muted">Assigned: {giftsAssigned} / {totalGifts}</div>
-      </section>
-
       {/* Controls */}
       <section className="tg-card flex items-center justify-between">
         <div>
           <div className="text-lg font-semibold">Round #{roundIndex}</div>
-          <div className="tg-muted text-sm">State: {state}</div>
+          <div className="tg-muted text-sm">State: {timeLeft > 0 ? "active" : "ended"}</div>
         </div>
-        <div className="flex items-center gap-4">
+        <div className="flex items-center">
           <div className={`text-2xl font-mono ${timeLeft < 10_000 ? "text-red-400" : "text-green-300"}`}>
-            {state === "running" ? formatTime(timeLeft) : "--:--"}
+            {timeLeft > 0 ? formatTime(timeLeft) : "--:--"}
           </div>
-          {state !== "running" && giftsLeft > 0 && (
-            <button onClick={startRound} className="tg-btn tg-btn-success">
-              Start round
-            </button>
-          )}
-          {state === "running" && (
-            <button onClick={endRound} className="tg-btn tg-btn-danger">
-              End round
-            </button>
-          )}
         </div>
+      </section>
+
+      <section className="tg-card space-y-3">
+        <div className="text-lg font-semibold">Auction</div>
+        {!auctionDetails ? (
+          <div className="tg-muted">Loading auction...</div>
+        ) : (
+          <div className="space-y-3 text-sm">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <div className="tg-muted">Status</div>
+                <div className="font-medium capitalize">{auctionDetails.status}</div>
+              </div>
+              <div>
+                <div className="tg-muted">Seller</div>
+                <div className="font-mono">{shortId(auctionDetails.sellerId)}</div>
+              </div>
+              <div>
+                <div className="tg-muted">Seller Wallet</div>
+                <div className="font-mono">{shortId(auctionDetails.sellerWalletId)}</div>
+              </div>
+              <div>
+                <div className="tg-muted">Settings</div>
+                <div>
+                  <span className="mr-3">Antisniping: <b>{auctionDetails.settings.antisniping ? "on" : "off"}</b></span>
+                  <span className="mr-3">Min bid: <b>{auctionDetails.settings.minBid}</b></span>
+                  <span>Min diff: <b>{auctionDetails.settings.minBidDifference}</b></span>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div className="tg-muted mb-1">Rounds</div>
+              {(!auctionDetails.rounds || auctionDetails.rounds.length === 0) ? (
+                <div className="tg-muted">No rounds</div>
+              ) : (
+                <ul className="space-y-2">
+                  {auctionDetails.rounds.map((r, idx) => (
+                    <li key={idx} className="flex justify-between items-center bg-white/5 rounded px-3 py-2">
+                      <div>
+                        <div className="font-semibold">Round #{idx + 1}</div>
+                        <div className="text-xs tg-muted">
+                          <span className="mr-3">Start: {r.startTime ? new Date(r.startTime).toLocaleString() : "—"}</span>
+                          <span>End: {r.endTime ? new Date(r.endTime).toLocaleString() : "—"}</span>
+                        </div>
+                      </div>
+                      <div className="text-xs">
+                        itemIds: <span className="font-mono">{r.itemIds?.length ?? 0}</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* My bid */}
       <section className="tg-card space-y-3">
         <div className="flex items-end gap-3">
           <div className="flex-1">
-            <label className="block text-sm tg-muted mb-1">My bid (stars)</label>
+            <label className="block text-lg font-semibold mb-1">My bid (stars)</label>
             <input
               type="number"
               value={amountInput}
-              onChange={(e) => setAmountInput(parseInt(e.target.value) || 0)}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setAmountInput(parseInt(e.target.value) || 0)}
               className="w-full tg-input"
             />
           </div>
@@ -305,7 +265,7 @@ export default function AuctionSimPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                {sortedLeaderboard.map((b, i) => (
+                {sortedLeaderboard.map((b: ApiBid, i: number) => (
                   <tr key={b.userId} className={`${b.userId === user?.id ? "bg-blue-900/20" : ""} ${i < perRound ? "text-green-300" : ""}`}>
                     <td className="py-2">#{i + 1}</td>
                     <td className="py-2 font-mono">{shortId(b.userId)}</td>
@@ -319,34 +279,7 @@ export default function AuctionSimPage() {
         )}
       </section>
 
-      {/* Winners history */}
-      <section className="tg-card space-y-3">
-        <div className="text-lg font-semibold">Winners</div>
-        {winners.length === 0 ? (
-          <div className="tg-muted">No winners yet</div>
-        ) : (
-          <ul className="space-y-2">
-            {winners.map((w) => (
-              <li key={`${w.giftNumber}-${w.userId}`} className="flex justify-between tg-card">
-                <div>
-                  <span className="font-semibold">Gift #{w.giftNumber}</span>
-                  <span className="ml-2 text-xs tg-muted">(round {w.round})</span>
-                </div>
-                <div className="text-sm">
-                  <span className="font-mono mr-3">{shortId(w.userId)}</span>
-                  <span className="text-yellow-300">{fmtStars(w.amount)}</span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      {state === "ended" && (
-        <section className="tg-card text-sm" style={{ borderColor: "#2ab673" }}>
-          Auction ended. {user && <>Your refund: <b>{fmtStars(myRefund)}</b></>}
-        </section>
-      )}
+      
     </div>
   );
 }

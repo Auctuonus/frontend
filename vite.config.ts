@@ -6,9 +6,10 @@ export default defineConfig({
   server: {
     allowedHosts: [
       "sierra-violation-memorial-shore.trycloudflare.com",
+      "rabbit-anonymous-arrivals-future.trycloudflare.com"
     ],
     hmr: {
-      host: "sierra-violation-memorial-shore.trycloudflare.com",
+      host: "rabbit-anonymous-arrivals-future.trycloudflare.com",
       protocol: "wss",
       clientPort: 443,
     },
