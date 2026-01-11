@@ -1,23 +1,22 @@
 import { Routes, Route, Link } from "react-router-dom";
-import DemoDocsPage from "./pages/Page";
+import AuctionSimPage from "./pages/AuctionSimPage";
 
 function App() {
   return (
     <div className="min-h-screen">
-      <nav className="bg-gray-800 border-b border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 py-3">
-          <div className="flex items-center justify-between">
-            <Link to="/" className="text-xl font-bold text-blue-400">
+      <nav style={{ backgroundColor: "var(--tg-theme-secondary-bg-color)", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+        <div className="max-w-3xl mx-auto px-4 py-3">
+          <div className="flex items-center justify-center">
+            <Link to="/" className="text-xl font-semibold">
               TG Gift Auctions
             </Link>
-            <div />
           </div>
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 py-8">
+      <main className="max-w-3xl mx-auto px-4 py-6">
         <Routes>
-          <Route path="/" element={<DemoDocsPage />} />
+          <Route path="/" element={<AuctionSimPage />} />
         </Routes>
       </main>
     </div>
