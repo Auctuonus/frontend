@@ -18,6 +18,7 @@ export type Wallet = {
 
 export type AuctionSummary = {
   id: string;
+  name: string;
   status: "active" | "ended" | "cancelled";
   sellerId: string;
   sellerWalletId: string;
@@ -81,6 +82,7 @@ db.me.wallet.userId = db.me.user.id;
 
 const sampleAuction: Auction = {
   id: uid("auc"),
+  name: "Gift Drop A",
   status: "active",
   sellerId: uid("seller"),
   sellerWalletId: uid("wallet"),
@@ -113,6 +115,7 @@ const sampleAuction: Auction = {
 
 const sampleAuction2: Auction = {
   id: uid("auc"),
+  name: "Gift Drop B",
   status: "active",
   sellerId: uid("seller"),
   sellerWalletId: uid("wallet"),
@@ -145,6 +148,7 @@ const sampleAuction2: Auction = {
 
 const sampleAuction3: Auction = {
   id: uid("auc"),
+  name: "Gift Drop C",
   status: "active",
   sellerId: uid("seller"),
   sellerWalletId: uid("wallet"),

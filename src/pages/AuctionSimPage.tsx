@@ -209,6 +209,10 @@ export default function AuctionSimPage() {
           <div className="space-y-3 text-sm">
             <div className="grid grid-cols-2 gap-3">
               <div>
+                <div className="tg-muted">Auction</div>
+                <div className="font-mono">{shortId(auctionDetails.id)}</div>
+              </div>
+              <div>
                 <div className="tg-muted">Status</div>
                 <div className="font-medium capitalize">{auctionDetails.status}</div>
               </div>
