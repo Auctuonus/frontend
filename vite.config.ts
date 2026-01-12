@@ -5,12 +5,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     allowedHosts: [
-      "sierra-violation-memorial-shore.trycloudflare.com",
-      "rabbit-anonymous-arrivals-future.trycloudflare.com",
-      "parental-rapidly-not-magnitude.trycloudflare.com"
+      "incidence-radar-conservative-nottingham.trycloudflare.com",
     ],
     hmr: {
-      host: "parental-rapidly-not-magnitude.trycloudflare.com",
+      host: "incidence-radar-conservative-nottingham.trycloudflare.com",
       protocol: "wss",
       clientPort: 443,
     },

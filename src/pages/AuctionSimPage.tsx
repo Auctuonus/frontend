@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ChangeEvent } from "react";
-import api, { type Bid as ApiBid, type Auction } from "../api/stubs";
+import api, { type Bid as ApiBid, type Auction, type AuctionSummary } from "../api/stubs";
 
 type SimUser = { id: string; name: string };
 
@@ -54,6 +54,8 @@ export default function AuctionSimPage() {
   const [endAtMs, setEndAtMs] = useState<number | null>(null);
   const [timeLeft, setTimeLeft] = useState(0);
   const [auctionDetails, setAuctionDetails] = useState<Auction | null>(null);
+  const [auctions, setAuctions] = useState<AuctionSummary[]>([]);
+  const [auctionsLoading, setAuctionsLoading] = useState(false);
 
   // Derived
   const sortedLeaderboard = useMemo(() => {
@@ -75,6 +77,17 @@ export default function AuctionSimPage() {
     setMyBid(my_bids);
     setTopBids(top_bids);
   }, [amountInput, auctionId, myBid, user]);
+
+  const loadAuction = useCallback(async (id: string) => {
+    setAuctionId(id);
+    const { auction } = await api.auctions.get(id);
+    const end = auction.rounds?.[0]?.endTime ? Date.parse(auction.rounds[0].endTime) : NaN;
+    setEndAtMs(Number.isFinite(end) ? end : null);
+    setAuctionDetails(auction);
+    const { my_bids, top_bids } = await api.bids.get_by_auction(id);
+    setMyBid(my_bids);
+    setTopBids(top_bids);
+  }, []);
 
   // Helpers
   function formatTime(ms: number) {
@@ -100,18 +113,15 @@ export default function AuctionSimPage() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      // pick first active auction
-      const list = await api.auctions.get_list({ filters: { status: ["active"] }, pagination: { page: 1, pageSize: 10 } });
-      const first = list.auctions[0];
-      if (!first) return;
-      setAuctionId(first.id);
-      const { auction } = await api.auctions.get(first.id);
-      const end = auction.rounds?.[0]?.endTime ? Date.parse(auction.rounds[0].endTime) : NaN;
-      setEndAtMs(Number.isFinite(end) ? end : null);
-      setAuctionDetails(auction);
-      const { my_bids, top_bids } = await api.bids.get_by_auction(first.id);
-      setMyBid(my_bids);
-      setTopBids(top_bids);
+      setAuctionsLoading(true);
+      try {
+        const list = await api.auctions.get_list({ filters: { status: ["active"] }, pagination: { page: 1, pageSize: 20 } });
+        setAuctions(list.auctions);
+        const toSelect = auctionId ?? list.auctions[0]?.id ?? null;
+        if (toSelect) await loadAuction(toSelect);
+      } finally {
+        setAuctionsLoading(false);
+      }
     })();
   }, [user]);
 
@@ -143,6 +153,39 @@ export default function AuctionSimPage() {
             </button>
           )}
         </div>
+      </section>
+
+      {/* Auctions */}
+      <section className="tg-card space-y-3">
+        <div className="text-lg font-semibold">Auctions</div>
+        {!user ? (
+          <div className="tg-muted">Sign in to view auctions</div>
+        ) : auctionsLoading ? (
+          <div className="tg-muted">Loading auctions...</div>
+        ) : auctions.length === 0 ? (
+          <div className="tg-muted">No active auctions</div>
+        ) : (
+          <ul className="space-y-2">
+            {auctions.map((a) => (
+              <li key={a.id}>
+                <button
+                  onClick={() => loadAuction(a.id)}
+                  className={`w-full flex items-center justify-between rounded px-3 py-2 ${
+                    a.id === auctionId ? "bg-white/10 border border-white/10" : "bg-white/5 hover:bg-white/10"
+                  }`}
+                >
+                  <div>
+                    <div className="font-medium">{shortId(a.id)}</div>
+                    <div className="text-xs tg-muted">{a.status}</div>
+                  </div>
+                  <div className="text-xs tg-muted">
+                    minBid: <b>{a.settings.minBid}</b>
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </section>
 
       {/* Controls */}

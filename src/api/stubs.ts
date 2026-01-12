@@ -98,10 +98,82 @@ const sampleAuction: Auction = {
         { id: "gifts_3", num: 3, collectionName: "gifts", value: "Bronze", ownerId: uid("owner") },
       ],
     },
+    {
+      startTime: new Date(Date.now() + 120_000).toISOString(),
+      endTime: new Date(Date.now() + 300_000).toISOString(),
+      itemIds: [uid("item4"), uid("item5"), uid("item6")],
+      items: [
+        { id: "gifts_4", num: 1, collectionName: "gifts", value: "Diamond", ownerId: uid("owner") },
+        { id: "gifts_5", num: 2, collectionName: "gifts", value: "Platinum", ownerId: uid("owner") },
+        { id: "gifts_6", num: 3, collectionName: "gifts", value: "Ruby", ownerId: uid("owner") },
+      ],
+    },
   ],
 };
 
-db.auctions.push(sampleAuction);
+const sampleAuction2: Auction = {
+  id: uid("auc"),
+  status: "active",
+  sellerId: uid("seller"),
+  sellerWalletId: uid("wallet"),
+  settings: { antisniping: false, minBid: 200, minBidDifference: 20 },
+  createdAt: nowIso(),
+  updatedAt: nowIso(),
+  rounds: [
+    {
+      startTime: new Date(Date.now() - 120_000).toISOString(),
+      endTime: new Date(Date.now() + 90_000).toISOString(),
+      itemIds: [uid("item1"), uid("item2"), uid("item3")],
+      items: [
+        { id: "gifts2_1", num: 1, collectionName: "gifts", value: "Gold", ownerId: uid("owner") },
+        { id: "gifts2_2", num: 2, collectionName: "gifts", value: "Silver", ownerId: uid("owner") },
+        { id: "gifts2_3", num: 3, collectionName: "gifts", value: "Bronze", ownerId: uid("owner") },
+      ],
+    },
+    {
+      startTime: new Date(Date.now() + 180_000).toISOString(),
+      endTime: new Date(Date.now() + 360_000).toISOString(),
+      itemIds: [uid("item4"), uid("item5"), uid("item6")],
+      items: [
+        { id: "gifts2_4", num: 1, collectionName: "gifts", value: "Emerald", ownerId: uid("owner") },
+        { id: "gifts2_5", num: 2, collectionName: "gifts", value: "Sapphire", ownerId: uid("owner") },
+        { id: "gifts2_6", num: 3, collectionName: "gifts", value: "Amethyst", ownerId: uid("owner") },
+      ],
+    },
+  ],
+};
+
+const sampleAuction3: Auction = {
+  id: uid("auc"),
+  status: "active",
+  sellerId: uid("seller"),
+  sellerWalletId: uid("wallet"),
+  settings: { antisniping: true, minBid: 50, minBidDifference: 5 },
+  createdAt: nowIso(),
+  updatedAt: nowIso(),
+  rounds: [
+    {
+      startTime: new Date(Date.now() - 30_000).toISOString(),
+      endTime: new Date(Date.now() + 90_000).toISOString(),
+      itemIds: [uid("item1"), uid("item2")],
+      items: [
+        { id: "gifts3_1", num: 1, collectionName: "gifts", value: "Gold", ownerId: uid("owner") },
+        { id: "gifts3_2", num: 2, collectionName: "gifts", value: "Silver", ownerId: uid("owner") },
+      ],
+    },
+    {
+      startTime: new Date(Date.now() + 150_000).toISOString(),
+      endTime: new Date(Date.now() + 300_000).toISOString(),
+      itemIds: [uid("item3"), uid("item4")],
+      items: [
+        { id: "gifts3_3", num: 1, collectionName: "gifts", value: "Crystal", ownerId: uid("owner") },
+        { id: "gifts3_4", num: 2, collectionName: "gifts", value: "Pearl", ownerId: uid("owner") },
+      ],
+    },
+  ],
+};
+
+db.auctions.push(sampleAuction, sampleAuction2, sampleAuction3);
 
 function ensureAuth() {
   if (!db.tokens?.accessToken) {
@@ -155,7 +227,8 @@ export const api = {
   bids: {
     set_bid(body: { auctionId: string; amount: number }): Promise<{ status: "ok" | "not_enough" | "error"; data?: { amount: number; newEndDate: string } }> {
       ensureAuth();
-      const min = db.auctions[0].settings.minBid;
+      const selected = db.auctions.find((a) => a.id === body.auctionId) || db.auctions[0];
+      const min = selected.settings.minBid;
       if (body.amount < min) {
         return delay({ status: "not_enough" });
       }
