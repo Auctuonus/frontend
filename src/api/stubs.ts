@@ -12,6 +12,7 @@ export type Wallet = {
   userId: string;
   balance: number;
   lockedBalance: number;
+  freeBalance: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -23,7 +24,7 @@ export type AuctionSummary = {
   sellerId: string;
   sellerWalletId: string;
   settings: {
-    antisniping: boolean;
+    antisniping: number | null;
     minBid: number;
     minBidDifference: number;
   };
@@ -72,7 +73,7 @@ const db = {
   tokens: null as TokenPair | null,
   me: {
     user: { id: uid("user"), telegramId: "449840517", createdAt: nowIso(), updatedAt: nowIso() } as User,
-    wallet: { id: uid("wallet"), userId: "", balance: 123456, lockedBalance: 0, createdAt: nowIso(), updatedAt: nowIso() } as Wallet,
+    wallet: { id: uid("wallet"), userId: "", balance: 123456, lockedBalance: 0, freeBalance: 123456, createdAt: nowIso(), updatedAt: nowIso() } as Wallet,
   },
   auctions: [] as Auction[],
   bids: [] as Bid[],
@@ -86,7 +87,7 @@ const sampleAuction: Auction = {
   status: "active",
   sellerId: uid("seller"),
   sellerWalletId: uid("wallet"),
-  settings: { antisniping: true, minBid: 100, minBidDifference: 10 },
+  settings: { antisniping: 15, minBid: 100, minBidDifference: 10 },
   createdAt: nowIso(),
   updatedAt: nowIso(),
   rounds: [
@@ -119,7 +120,7 @@ const sampleAuction2: Auction = {
   status: "active",
   sellerId: uid("seller"),
   sellerWalletId: uid("wallet"),
-  settings: { antisniping: false, minBid: 200, minBidDifference: 20 },
+  settings: { antisniping: null, minBid: 200, minBidDifference: 20 },
   createdAt: nowIso(),
   updatedAt: nowIso(),
   rounds: [
@@ -152,7 +153,7 @@ const sampleAuction3: Auction = {
   status: "active",
   sellerId: uid("seller"),
   sellerWalletId: uid("wallet"),
-  settings: { antisniping: true, minBid: 50, minBidDifference: 5 },
+  settings: { antisniping: 5, minBid: 50, minBidDifference: 5 },
   createdAt: nowIso(),
   updatedAt: nowIso(),
   rounds: [
@@ -204,6 +205,7 @@ export const api = {
   users: {
     get_me(): Promise<{ user: User; wallet: Wallet }> {
       ensureAuth();
+      db.me.wallet.freeBalance = db.me.wallet.balance - db.me.wallet.lockedBalance;
       return delay({ user: db.me.user, wallet: db.me.wallet });
     },
   },
