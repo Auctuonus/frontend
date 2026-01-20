@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ChangeEvent } from "react";
-import api, { type Bid as ApiBid, type Auction, type AuctionSummary } from "../api/stubs";
+import api, { type Bid as ApiBid, type Auction, type AuctionSummary } from "../api/http";
 
 type SimUser = { id: string; name: string };
 
@@ -34,11 +34,28 @@ export default function AuctionSimPage() {
     }
   }, []);
 
-  const mockLogin = useCallback(() => {
-    const id = `mock-${Math.random().toString(16).slice(2, 10)}`;
-    setUser({ id, name: `Mock ${id.slice(-4)}` });
-    api.auth.refresh("mock").catch(() => {});
-  }, []);
+  const [loginTgId, setLoginTgId] = useState("449840517");
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [loginLoading, setLoginLoading] = useState(false);
+
+  const mockLogin = useCallback(async () => {
+    const tgId = parseInt(loginTgId, 10);
+    if (!tgId || isNaN(tgId)) {
+      setLoginError("Enter valid Telegram ID");
+      return;
+    }
+    setLoginLoading(true);
+    setLoginError(null);
+    try {
+      await api.auth.password(tgId, String(tgId));
+      const { user: u } = await api.users.get_me();
+      setUser({ id: u.id, name: `TG ${u.telegramId}` });
+    } catch (e: any) {
+      setLoginError(e?.message || "Login failed");
+    } finally {
+      setLoginLoading(false);
+    }
+  }, [loginTgId]);
   const logout = useCallback(() => {
     setUser(null);
   }, []);
@@ -128,31 +145,44 @@ export default function AuctionSimPage() {
   return (
     <div className="space-y-6">
       {/* Auth */}
-      <section className="tg-card flex items-center justify-between">
-        <div>
-          <div className="text-lg font-semibold">Telegram Auth</div>
-          <div className="tg-muted text-sm">
-            {user ? (
-              <>
-                Signed in as <span className="font-mono">{user.name}</span>
-              </>
-            ) : (
-              <>Not signed in (use Telegram or Mock Login)</>
-            )}
+      <section className="tg-card space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-lg font-semibold">Telegram Auth</div>
+            <div className="tg-muted text-sm">
+              {user ? (
+                <>
+                  Signed in as <span className="font-mono">{user.name}</span>
+                </>
+              ) : (
+                <>Not signed in</>
+              )}
+            </div>
           </div>
-        </div>
-        <div className="flex gap-2">
-          {!user && (
-            <button onClick={mockLogin} className="tg-btn">
-              Mock Login
-            </button>
-          )}
           {user && (
             <button onClick={logout} className="tg-btn tg-btn-secondary">
               Logout
             </button>
           )}
         </div>
+        {!user && (
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <label className="block text-xs tg-muted mb-1">Telegram ID</label>
+              <input
+                type="text"
+                value={loginTgId}
+                onChange={(e) => setLoginTgId(e.target.value)}
+                className="w-full tg-input"
+                placeholder="449840517"
+              />
+            </div>
+            <button onClick={mockLogin} disabled={loginLoading} className="tg-btn disabled:opacity-60">
+              {loginLoading ? "..." : "Login"}
+            </button>
+          </div>
+        )}
+        {loginError && <div className="text-red-400 text-sm">{loginError}</div>}
       </section>
 
       {/* Auctions */}

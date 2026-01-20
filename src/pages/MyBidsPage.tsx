@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import api, { type Bid as ApiBid } from "../api/stubs";
+import api, { type Bid as ApiBid } from "../api/http";
 
 function shortId(id: string) {
   return id.length > 8 ? `${id.slice(0, 8)}...` : id;

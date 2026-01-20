@@ -6,9 +6,10 @@ export default defineConfig({
   server: {
     allowedHosts: [
       "incidence-radar-conservative-nottingham.trycloudflare.com",
+      "scoop-reporting-occasionally-turn.trycloudflare.com"
     ],
     hmr: {
-      host: "incidence-radar-conservative-nottingham.trycloudflare.com",
+      host: "scoop-reporting-occasionally-turn.trycloudflare.com",
       protocol: "wss",
       clientPort: 443,
     },
@@ -16,6 +17,7 @@ export default defineConfig({
       "/v1": {
         target: "http://localhost:3000",
         changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/v1/, ""),
       },
       "/admin": {
         target: "http://localhost:3000",
