@@ -84,15 +84,28 @@ export default function AuctionSimPage() {
   const myRank = user ? sortedLeaderboard.findIndex((b) => b.userId === user.id) : -1;
 
   const [amountInput, setAmountInput] = useState(100);
+  const [bidError, setBidError] = useState<string | null>(null);
+  const [bidLoading, setBidLoading] = useState(false);
+
   const placeOrIncreaseBid = useCallback(async () => {
     if (!user || !auctionId) return;
     if (amountInput <= (myBid?.amount ?? 0)) return;
-    const res = await api.bids.set_bid({ auctionId, amount: amountInput });
-    if (res.status !== "ok") return;
-    setAmountInput(res.data?.amount ?? amountInput);
-    const { my_bids, top_bids } = await api.bids.get_by_auction(auctionId);
-    setMyBid(my_bids);
-    setTopBids(top_bids);
+    setBidError(null);
+    setBidLoading(true);
+    try {
+      const res = await api.bids.set_bid({ auctionId, amount: amountInput });
+      if (res.status !== "ok") {
+        const code = res.error?.code ? `[${res.error.code}] ` : '';
+        setBidError(`${code}${res.error?.message || 'Bid failed'}`);
+        return;
+      }
+      setAmountInput(res.data?.amount ?? amountInput);
+      const { my_bids, top_bids } = await api.bids.get_by_auction(auctionId);
+      setMyBid(my_bids);
+      setTopBids(top_bids);
+    } finally {
+      setBidLoading(false);
+    }
   }, [amountInput, auctionId, myBid, user]);
 
   const loadAuction = useCallback(async (id: string) => {
@@ -305,12 +318,17 @@ export default function AuctionSimPage() {
           </div>
           <button
             onClick={placeOrIncreaseBid}
-            disabled={!user || amountInput <= (myBid?.amount ?? 0)}
+            disabled={!user || bidLoading || amountInput <= (myBid?.amount ?? 0)}
             className="tg-btn disabled:opacity-60"
           >
-            {myBid ? "Increase bid" : "Place bid"}
+            {bidLoading ? "..." : myBid ? "Increase bid" : "Place bid"}
           </button>
         </div>
+        {bidError && (
+          <div className="text-sm text-red-400 bg-red-900/30 border border-red-700/50 rounded-lg px-3 py-2">
+            {bidError}
+          </div>
+        )}
         <div className="text-sm tg-muted">
           {myBid ? (
             <>Your current bid: <span className="text-blue-300 font-semibold">{fmtStars(myBid.amount)}</span> {myRank >= 0 && <>· Position: #{myRank + 1}</>}</>

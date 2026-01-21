@@ -64,3 +64,9 @@ body {
 
 .tg-btn-danger { background-color: #e05259; color: #fff; }
 .tg-btn-success { background-color: #2ab673; color: #fff; }
+
+@keyframes slide-in {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+.animate-slide-in { animation: slide-in 0.2s ease-out; }

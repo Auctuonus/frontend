@@ -1,3 +1,5 @@
+import { showError } from './toast';
+
 type TokenPair = { accessToken: string; refreshToken: string };
 
 export type User = {
@@ -87,7 +89,9 @@ async function post<T>(path: string, body?: any, opts?: { auth?: boolean; tma?: 
   if (!res.ok) {
     let data: any = null;
     try { data = await res.json(); } catch {}
-    const err: any = new Error(data?.message || `HTTP ${res.status}`);
+    const message = data?.message || `HTTP ${res.status}`;
+    showError(message, res.status);
+    const err: any = new Error(message);
     err.status = res.status;
     err.data = data;
     throw err;
@@ -200,7 +204,7 @@ export const api = {
     },
   },
   bids: {
-    async set_bid(body: { auctionId: string; amount: number }): Promise<{ status: 'ok' | 'not_enough' | 'error'; data?: { amount: number; newEndDate: string } }> {
+    async set_bid(body: { auctionId: string; amount: number }): Promise<{ status: 'ok' | 'not_enough' | 'error'; data?: { amount: number; newEndDate: string }; error?: { message: string; code?: number } }> {
       try {
         const res = await post<any>('/bids/set_bid', body, { auth: true });
         return {
@@ -208,11 +212,12 @@ export const api = {
           data: res?.data ? { amount: Number(res.data.amount), newEndDate: new Date(res.data.newEndDate).toISOString() } : undefined,
         };
       } catch (e: any) {
-        const msg = String(e?.data?.message || e?.message || '').toLowerCase();
-        if (e?.status === 400 && (msg.includes('min') || msg.includes('not enough') || msg.includes('difference'))) {
-          return { status: 'not_enough' };
+        const msg = String(e?.data?.message || e?.message || '');
+        const code = e?.status as number | undefined;
+        if (code === 400 && (msg.toLowerCase().includes('min') || msg.toLowerCase().includes('not enough') || msg.toLowerCase().includes('difference'))) {
+          return { status: 'not_enough', error: { message: msg, code } };
         }
-        return { status: 'error' };
+        return { status: 'error', error: { message: msg || 'Unknown error', code } };
       }
     },
     async get_my(): Promise<{ bids: Bid[] }> {

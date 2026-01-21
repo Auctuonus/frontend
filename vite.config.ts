@@ -5,11 +5,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     allowedHosts: [
-      "incidence-radar-conservative-nottingham.trycloudflare.com",
-      "scoop-reporting-occasionally-turn.trycloudflare.com"
+      "focused-treatments-walk-objects.trycloudflare.com"
     ],
     hmr: {
-      host: "scoop-reporting-occasionally-turn.trycloudflare.com",
+      host: "focused-treatments-walk-objects.trycloudflare.com",
       protocol: "wss",
       clientPort: 443,
     },

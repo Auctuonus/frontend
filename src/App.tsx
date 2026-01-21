@@ -1,6 +1,7 @@
 import { Routes, Route, Link, useLocation } from "react-router-dom";
 import AuctionSimPage from "./pages/AuctionSimPage";
 import MyBidsPage from "./pages/MyBidsPage";
+import ToastContainer from "./components/ToastContainer";
 
 function App() {
   const location = useLocation();
@@ -61,6 +62,7 @@ function App() {
           <Route path="/me" element={<MyBidsPage />} />
         </Routes>
       </main>
+      <ToastContainer />
     </div>
   );
 }
