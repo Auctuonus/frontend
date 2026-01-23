@@ -75,7 +75,7 @@ function setTokens(next: TokenPair) {
   } catch {}
 }
 
-async function post<T>(path: string, body?: any, opts?: { auth?: boolean; tma?: string }) {
+async function post<T>(path: string, body?: any, opts?: { auth?: boolean; tma?: string; silent?: boolean }) {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (opts?.auth && tokens?.accessToken) headers['Authorization'] = `Bearer ${tokens.accessToken}`;
   if (opts?.tma) headers['Authorization'] = `tma ${opts.tma}`;
@@ -90,7 +90,7 @@ async function post<T>(path: string, body?: any, opts?: { auth?: boolean; tma?: 
     let data: any = null;
     try { data = await res.json(); } catch {}
     const message = data?.message || `HTTP ${res.status}`;
-    showError(message, res.status);
+    if (!opts?.silent) showError(message, res.status);
     const err: any = new Error(message);
     err.status = res.status;
     err.data = data;
@@ -166,15 +166,15 @@ export const api = {
     },
   },
   users: {
-    async get_me(): Promise<{ user: User; wallet: Wallet }> {
-      const res = await post<any>('/users/get_me', undefined, { auth: true });
+    async get_me(): Promise<{ user: User; wallet: Wallet | null }> {
+      const res = await post<any>('/users/get_me', undefined, { auth: true, silent: true });
       const user: User = {
         id: String(res.user.id),
         telegramId: String(res.user.telegramId),
         createdAt: new Date(res.user.createdAt).toISOString(),
         updatedAt: new Date(res.user.updatedAt).toISOString(),
       };
-      const wallet: Wallet = {
+      const wallet: Wallet | null = res.wallet ? {
         id: String(res.wallet.id),
         userId: String(res.wallet.userId),
         balance: Number(res.wallet.balance),
@@ -182,7 +182,7 @@ export const api = {
         freeBalance: Number(res.wallet.freeBalance),
         createdAt: new Date(res.wallet.createdAt).toISOString(),
         updatedAt: new Date(res.wallet.updatedAt).toISOString(),
-      };
+      } : null;
       return { user, wallet };
     },
   },

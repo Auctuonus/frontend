@@ -5,10 +5,10 @@ export default defineConfig({
   plugins: [react()],
   server: {
     allowedHosts: [
-      "focused-treatments-walk-objects.trycloudflare.com"
+      "launched-omissions-isaac-kennedy.trycloudflare.com"
     ],
     hmr: {
-      host: "focused-treatments-walk-objects.trycloudflare.com",
+      host: "launched-omissions-isaac-kennedy.trycloudflare.com",
       protocol: "wss",
       clientPort: 443,
     },

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ChangeEvent } from "react";
-import api, { type Bid as ApiBid, type Auction, type AuctionSummary } from "../api/http";
+import api, { type Bid as ApiBid, type Auction, type AuctionSummary, type Wallet } from "../api/http";
 
 type SimUser = { id: string; name: string };
 
@@ -15,6 +15,7 @@ function shortId(id: string) {
 export default function AuctionSimPage() {
   // Auth: Telegram or mock
   const [user, setUser] = useState<SimUser | null>(null);
+  const [wallet, setWallet] = useState<Wallet | null>(null);
 
   useEffect(() => {
     // Try to read Telegram WebApp user (works inside Telegram only)
@@ -28,7 +29,10 @@ export default function AuctionSimPage() {
         tg.ready?.();
         tg.expand?.();
         if (tg.initData) {
-          api.auth.tg(tg.initData).catch(() => {});
+          api.auth.tg(tg.initData)
+            .then(() => api.users.get_me())
+            .then(({ wallet: w }) => w && setWallet(w))
+            .catch(() => {}); // Wallet may not exist yet
         }
       } catch {}
     }
@@ -47,9 +51,11 @@ export default function AuctionSimPage() {
     setLoginLoading(true);
     setLoginError(null);
     try {
-      await api.auth.password(tgId, String(tgId));
-      const { user: u } = await api.users.get_me();
+      await api.auth.password(tgId, "123456");
+      const { user: u, wallet: w } = await api.users.get_me();
+      console.log('get_me response:', { user: u, wallet: w });
       setUser({ id: u.id, name: `TG ${u.telegramId}` });
+      setWallet(w);
     } catch (e: any) {
       setLoginError(e?.message || "Login failed");
     } finally {
@@ -58,6 +64,7 @@ export default function AuctionSimPage() {
   }, [loginTgId]);
   const logout = useCallback(() => {
     setUser(null);
+    setWallet(null);
   }, []);
 
   // Auction params (read-only for UI)
@@ -308,7 +315,10 @@ export default function AuctionSimPage() {
       <section className="tg-card space-y-3">
         <div className="flex items-end gap-3">
           <div className="flex-1">
-            <label className="block text-lg font-semibold mb-1">My bid (stars)</label>
+            <label className="block text-lg font-semibold mb-1">
+              My bid (stars)
+              {wallet && <span className="ml-2 text-sm font-normal tg-muted">Balance: {fmtStars(wallet.freeBalance)}</span>}
+            </label>
             <input
               type="number"
               value={amountInput}
