@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ChangeEvent } from "react";
-import api, { type Bid as ApiBid, type Auction, type AuctionSummary } from "../api/stubs";
+import api, { type Bid as ApiBid, type Auction, type AuctionSummary, type Wallet } from "../api/http";
 
 type SimUser = { id: string; name: string };
 
@@ -15,6 +15,7 @@ function shortId(id: string) {
 export default function AuctionSimPage() {
   // Auth: Telegram or mock
   const [user, setUser] = useState<SimUser | null>(null);
+  const [wallet, setWallet] = useState<Wallet | null>(null);
 
   useEffect(() => {
     // Try to read Telegram WebApp user (works inside Telegram only)
@@ -28,19 +29,42 @@ export default function AuctionSimPage() {
         tg.ready?.();
         tg.expand?.();
         if (tg.initData) {
-          api.auth.tg(tg.initData).catch(() => {});
+          api.auth.tg(tg.initData)
+            .then(() => api.users.get_me())
+            .then(({ wallet: w }) => w && setWallet(w))
+            .catch(() => {}); // Wallet may not exist yet
         }
       } catch {}
     }
   }, []);
 
-  const mockLogin = useCallback(() => {
-    const id = `mock-${Math.random().toString(16).slice(2, 10)}`;
-    setUser({ id, name: `Mock ${id.slice(-4)}` });
-    api.auth.refresh("mock").catch(() => {});
-  }, []);
+  const [loginTgId, setLoginTgId] = useState("449840517");
+  const [loginError, setLoginError] = useState<string | null>(null);
+  const [loginLoading, setLoginLoading] = useState(false);
+
+  const mockLogin = useCallback(async () => {
+    const tgId = parseInt(loginTgId, 10);
+    if (!tgId || isNaN(tgId)) {
+      setLoginError("Enter valid Telegram ID");
+      return;
+    }
+    setLoginLoading(true);
+    setLoginError(null);
+    try {
+      await api.auth.password(tgId, "123456");
+      const { user: u, wallet: w } = await api.users.get_me();
+      console.log('get_me response:', { user: u, wallet: w });
+      setUser({ id: u.id, name: `TG ${u.telegramId}` });
+      setWallet(w);
+    } catch (e: any) {
+      setLoginError(e?.message || "Login failed");
+    } finally {
+      setLoginLoading(false);
+    }
+  }, [loginTgId]);
   const logout = useCallback(() => {
     setUser(null);
+    setWallet(null);
   }, []);
 
   // Auction params (read-only for UI)
@@ -67,15 +91,28 @@ export default function AuctionSimPage() {
   const myRank = user ? sortedLeaderboard.findIndex((b) => b.userId === user.id) : -1;
 
   const [amountInput, setAmountInput] = useState(100);
+  const [bidError, setBidError] = useState<string | null>(null);
+  const [bidLoading, setBidLoading] = useState(false);
+
   const placeOrIncreaseBid = useCallback(async () => {
     if (!user || !auctionId) return;
     if (amountInput <= (myBid?.amount ?? 0)) return;
-    const res = await api.bids.set_bid({ auctionId, amount: amountInput });
-    if (res.status !== "ok") return;
-    setAmountInput(res.data?.amount ?? amountInput);
-    const { my_bids, top_bids } = await api.bids.get_by_auction(auctionId);
-    setMyBid(my_bids);
-    setTopBids(top_bids);
+    setBidError(null);
+    setBidLoading(true);
+    try {
+      const res = await api.bids.set_bid({ auctionId, amount: amountInput });
+      if (res.status !== "ok") {
+        const code = res.error?.code ? `[${res.error.code}] ` : '';
+        setBidError(`${code}${res.error?.message || 'Bid failed'}`);
+        return;
+      }
+      setAmountInput(res.data?.amount ?? amountInput);
+      const { my_bids, top_bids } = await api.bids.get_by_auction(auctionId);
+      setMyBid(my_bids);
+      setTopBids(top_bids);
+    } finally {
+      setBidLoading(false);
+    }
   }, [amountInput, auctionId, myBid, user]);
 
   const loadAuction = useCallback(async (id: string) => {
@@ -128,31 +165,44 @@ export default function AuctionSimPage() {
   return (
     <div className="space-y-6">
       {/* Auth */}
-      <section className="tg-card flex items-center justify-between">
-        <div>
-          <div className="text-lg font-semibold">Telegram Auth</div>
-          <div className="tg-muted text-sm">
-            {user ? (
-              <>
-                Signed in as <span className="font-mono">{user.name}</span>
-              </>
-            ) : (
-              <>Not signed in (use Telegram or Mock Login)</>
-            )}
+      <section className="tg-card space-y-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-lg font-semibold">Telegram Auth</div>
+            <div className="tg-muted text-sm">
+              {user ? (
+                <>
+                  Signed in as <span className="font-mono">{user.name}</span>
+                </>
+              ) : (
+                <>Not signed in</>
+              )}
+            </div>
           </div>
-        </div>
-        <div className="flex gap-2">
-          {!user && (
-            <button onClick={mockLogin} className="tg-btn">
-              Mock Login
-            </button>
-          )}
           {user && (
             <button onClick={logout} className="tg-btn tg-btn-secondary">
               Logout
             </button>
           )}
         </div>
+        {!user && (
+          <div className="flex items-end gap-2">
+            <div className="flex-1">
+              <label className="block text-xs tg-muted mb-1">Telegram ID</label>
+              <input
+                type="text"
+                value={loginTgId}
+                onChange={(e) => setLoginTgId(e.target.value)}
+                className="w-full tg-input"
+                placeholder="449840517"
+              />
+            </div>
+            <button onClick={mockLogin} disabled={loginLoading} className="tg-btn disabled:opacity-60">
+              {loginLoading ? "..." : "Login"}
+            </button>
+          </div>
+        )}
+        {loginError && <div className="text-red-400 text-sm">{loginError}</div>}
       </section>
 
       {/* Auctions */}
@@ -265,7 +315,10 @@ export default function AuctionSimPage() {
       <section className="tg-card space-y-3">
         <div className="flex items-end gap-3">
           <div className="flex-1">
-            <label className="block text-lg font-semibold mb-1">My bid (stars)</label>
+            <label className="block text-lg font-semibold mb-1">
+              My bid (stars)
+              {wallet && <span className="ml-2 text-sm font-normal tg-muted">Balance: {fmtStars(wallet.freeBalance)}</span>}
+            </label>
             <input
               type="number"
               value={amountInput}
@@ -275,12 +328,17 @@ export default function AuctionSimPage() {
           </div>
           <button
             onClick={placeOrIncreaseBid}
-            disabled={!user || amountInput <= (myBid?.amount ?? 0)}
+            disabled={!user || bidLoading || amountInput <= (myBid?.amount ?? 0)}
             className="tg-btn disabled:opacity-60"
           >
-            {myBid ? "Increase bid" : "Place bid"}
+            {bidLoading ? "..." : myBid ? "Increase bid" : "Place bid"}
           </button>
         </div>
+        {bidError && (
+          <div className="text-sm text-red-400 bg-red-900/30 border border-red-700/50 rounded-lg px-3 py-2">
+            {bidError}
+          </div>
+        )}
         <div className="text-sm tg-muted">
           {myBid ? (
             <>Your current bid: <span className="text-blue-300 font-semibold">{fmtStars(myBid.amount)}</span> {myRank >= 0 && <>· Position: #{myRank + 1}</>}</>
