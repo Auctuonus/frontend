@@ -24,6 +24,8 @@ jobs:
         run: npm ci
       
       - name: Build project
+        env:
+          VITE_API_BASE: ${{ secrets.VITE_API_BASE }}
         run: npm run build
       
       - name: Create SPA fallback
